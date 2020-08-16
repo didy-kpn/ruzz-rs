@@ -1,5 +1,7 @@
 // use unicode_width::UnicodeWidthStr;
 
+use tui::widgets::ListState;
+
 #[derive(Clone)]
 struct Cursor {
     x: u16,
@@ -35,12 +37,91 @@ enum HttpMethod {
 }
 
 #[derive(Clone)]
+pub struct ListMethod {
+    state: ListState,
+    items: Vec<String>,
+    value: HttpMethod,
+}
+
+impl ListMethod {
+    pub fn new() -> ListMethod {
+        let mut state = ListState::default();
+        state.select(Some(0));
+        ListMethod {
+            state: state,
+            items: vec![
+                "GET".to_string(),
+                "HEAD".to_string(),
+                "POST".to_string(),
+                "PUT".to_string(),
+                "DELETE".to_string(),
+                "CONNECT".to_string(),
+                "OPTIONS".to_string(),
+                "TRACE".to_string(),
+                "PATCH".to_string(),
+            ],
+            value: HttpMethod::GET,
+        }
+    }
+
+    pub fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.items.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+        self.value = match self.value {
+            HttpMethod::GET => HttpMethod::HEAD,
+            HttpMethod::HEAD => HttpMethod::POST,
+            HttpMethod::POST => HttpMethod::PUT,
+            HttpMethod::PUT => HttpMethod::DELETE,
+            HttpMethod::DELETE => HttpMethod::CONNECT,
+            HttpMethod::CONNECT => HttpMethod::OPTIONS,
+            HttpMethod::OPTIONS => HttpMethod::TRACE,
+            HttpMethod::TRACE => HttpMethod::PATCH,
+            HttpMethod::PATCH => HttpMethod::GET,
+        };
+    }
+
+    pub fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.items.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+        self.value = match self.value {
+            HttpMethod::GET => HttpMethod::PATCH,
+            HttpMethod::HEAD => HttpMethod::GET,
+            HttpMethod::POST => HttpMethod::HEAD,
+            HttpMethod::PUT => HttpMethod::POST,
+            HttpMethod::DELETE => HttpMethod::PUT,
+            HttpMethod::CONNECT => HttpMethod::DELETE,
+            HttpMethod::OPTIONS => HttpMethod::CONNECT,
+            HttpMethod::TRACE => HttpMethod::OPTIONS,
+            HttpMethod::PATCH => HttpMethod::TRACE,
+        };
+    }
+}
+
+#[derive(Clone)]
 struct Request {
     url: EditView,
     params: EditView,
     header: EditView,
     body: EditView,
-    method: HttpMethod,
+    method: ListMethod,
 }
 
 #[derive(Clone)]
@@ -93,7 +174,7 @@ impl App {
                 params: EditView::new(),
                 header: EditView::new(),
                 body: EditView::new(),
-                method: HttpMethod::GET,
+                method: ListMethod::new(),
             },
             response: Response {
                 status: EditView::new(),
@@ -139,6 +220,14 @@ impl App {
         &self.request.url.cursor.x
     }
 
+    pub fn request_method_items_vec(&self) -> &Vec<String> {
+        &self.request.method.items
+    }
+
+    pub fn request_method_state(&self) -> &ListState {
+        &self.request.method.state
+    }
+
     pub fn request_params_cursor_x(&self) -> &u16 {
         &self.request.params.cursor.x
     }
@@ -165,6 +254,10 @@ impl App {
 
     pub fn is_mode_edit(&self) -> bool {
         !self.is_mode_view()
+    }
+
+    pub fn is_request_method_edit(&self) -> bool {
+        self.mode.edit == EditMode::RequestMethod
     }
 
     pub fn next_view(&mut self) {
@@ -400,24 +493,39 @@ impl App {
         }
     }
 
+    fn reqwest_method(&self) -> reqwest::Method {
+        match self.request.method.value {
+            HttpMethod::GET => reqwest::Method::GET,
+            HttpMethod::HEAD => reqwest::Method::HEAD,
+            HttpMethod::POST => reqwest::Method::POST,
+            HttpMethod::PUT => reqwest::Method::PUT,
+            HttpMethod::DELETE => reqwest::Method::DELETE,
+            HttpMethod::CONNECT => reqwest::Method::CONNECT,
+            HttpMethod::OPTIONS => reqwest::Method::OPTIONS,
+            HttpMethod::TRACE => reqwest::Method::TRACE,
+            HttpMethod::PATCH => reqwest::Method::PATCH,
+        }
+    }
+
     pub fn request(&mut self) {
         let client = reqwest::blocking::Client::new();
 
         let url = self.request_url_text();
 
-        let response = match self.request.method {
-            HttpMethod::GET => client.get(url),
-            HttpMethod::POST => client.post(url),
-            HttpMethod::PUT => client.put(url),
-            HttpMethod::DELETE => client.delete(url),
-            _ => client.get(url),
-        }
-        .send();
+        let response = client.request(self.reqwest_method(), url).send();
 
         if let Ok(resp) = response {
             self.response.status.text = format!("{:?}", resp.status());
             self.response.header.text = format!("{:#?}", resp.headers());
             self.response.body.text = resp.text().unwrap_or("".to_string());
         }
+    }
+
+    pub fn next_select_on_request_method(&mut self) {
+        self.request.method.next();
+    }
+
+    pub fn prev_select_on_request_method(&mut self) {
+        self.request.method.previous();
     }
 }

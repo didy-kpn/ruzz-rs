@@ -7,7 +7,8 @@ use tui::{
     backend::TermionBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
-    widgets::{Block, Borders, Paragraph},
+    text::Spans,
+    widgets::{Block, Borders, List, ListItem, Paragraph},
     Terminal,
 };
 
@@ -30,6 +31,8 @@ pub fn draw(
 
     let view = app.view_mode();
     let edit = app.edit_mode();
+
+    let mut request_method_state = app.request_method_state().clone();
 
     let _ = terminal.draw(|f| {
         let size = f.size();
@@ -104,8 +107,15 @@ pub fn draw(
         f.render_widget(request_params, request_chunks[0]);
 
         // Request Method
-        let method_text = "GET".to_string();
-        let request_method = Paragraph::new(method_text.as_ref())
+        let items: Vec<ListItem> = app
+            .request_method_items_vec()
+            .iter()
+            .map(|i| {
+                let lines = vec![Spans::from(i.to_string())];
+                ListItem::new(lines).style(Style::default())
+            })
+            .collect();
+        let items = List::new(items)
             .style(match view {
                 app::ViewMode::RequestMethod => {
                     if *edit == app::EditMode::RequestMethod {
@@ -116,8 +126,12 @@ pub fn draw(
                 }
                 _ => Style::default(),
             })
-            .block(Block::default().borders(Borders::ALL).title("Method"));
-        f.render_widget(request_method, request_chunks[1]);
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Request Method"),
+            );
+        f.render_stateful_widget(items, request_chunks[1], &mut request_method_state);
 
         // Request Header
         let request_header = Paragraph::new(request_header_text.as_ref())

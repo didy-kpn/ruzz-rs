@@ -48,13 +48,20 @@ pub fn edit_input_event(input: &Key, app: &mut app::App) {
         Key::Esc => {
             app.change_view_mode();
         }
-        // TODO: 2文字以上の移動+削除が想定外の動きをする
-        // Key::Right => {
-        //     app.right_move_cursor();
-        // }
-        // Key::Left => {
-        //     app.left_move_cursor();
-        // }
+        Key::Right => {
+            if app.is_request_method_edit() {
+                app.next_select_on_request_method();
+            }
+            // TODO: 2文字以上の移動+削除が想定外の動きをする
+            // app.right_move_cursor();
+        }
+        Key::Left => {
+            if app.is_request_method_edit() {
+                app.prev_select_on_request_method();
+            }
+            // TODO: 2文字以上の移動+削除が想定外の動きをする
+            // app.left_move_cursor();
+        }
         Key::Backspace => {
             app.delete_text();
         }
