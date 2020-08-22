@@ -43,8 +43,16 @@ pub fn view_input_event(input: &Key, app: &mut app::App) -> bool {
 // edit状態の入力ハンドラー
 pub fn edit_input_event(input: &Key, app: &mut app::App) {
     match input {
-        Key::Char('\n') => app.request(),
-
+        Key::Char('\n') => {
+            if app.is_request_url_edit() || app.is_request_method_edit() {
+                app.request();
+            } else {
+                app.insert_text('\n');
+            }
+        }
+        Key::Ctrl('r') => {
+            app.request();
+        }
         Key::Esc => {
             app.change_view_mode();
         }

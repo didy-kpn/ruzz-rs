@@ -1,6 +1,8 @@
 // use unicode_width::UnicodeWidthStr;
 
 use tui::widgets::ListState;
+use std::collections::BTreeMap;
+use reqwest::header::HeaderMap;
 
 #[derive(Clone)]
 struct Cursor {
@@ -240,6 +242,56 @@ impl App {
         &self.request.body.cursor.x
     }
 
+    pub fn request_params_map(&self) -> BTreeMap<String, String> {
+        let request_params_text = self.request_params_text();
+        let request_params_text = request_params_text.replace("\n", "&");
+
+        let mut params = BTreeMap::new();
+        for query_str in request_params_text.split('&') {
+            let q:Vec<String> = query_str.split('=').map(|s| s.to_string()).collect();
+            let key = q.get(0).unwrap_or(&"".to_string()).to_string();
+            let value = q.get(1).unwrap_or(&"".to_string()).to_string();
+            if key.len() == 0 && value.len() == 0 {
+                continue;
+            }
+            params.insert(key, value);
+        }
+
+        params
+    }
+
+    pub fn request_header_map(&self) -> HeaderMap {
+        let request_header_text = self.request_header_text();
+
+        let mut headers = HeaderMap::new();
+        for header_str in request_header_text.split('\n') {
+            let h:Vec<String> = header_str.split(':').map(|s| s.to_string()).collect();
+            let key = h.get(0).unwrap_or(&"".to_string()).to_string();
+            let value = h.get(1).unwrap_or(&"".to_string()).to_string();
+
+            if key == "" || value == "" {
+                break;
+            }
+
+            let key = Box::leak(key.into_boxed_str());
+
+            headers.entry(&*key).or_insert(value.parse().unwrap());
+
+            // if let Entry::Vacant(v) = headers.entry("x-hello") {
+            //     let mut e = v.insert_entry("world".parse().unwrap());
+            //     e.insert("world2".parse().unwrap());
+            // }
+
+            // let key = *key;
+            // let key = HeaderName::from_str(key);
+
+            // let value = h.get(1).unwrap_or(&"");
+            // let value = HeaderValue::from_str(*value);
+            // headers.append(key, value);
+        }
+        headers
+    }
+
     pub fn view_mode(&self) -> &ViewMode {
         &self.mode.view
     }
@@ -254,6 +306,10 @@ impl App {
 
     pub fn is_mode_edit(&self) -> bool {
         !self.is_mode_view()
+    }
+
+    pub fn is_request_url_edit(&self) -> bool {
+        self.mode.edit == EditMode::RequestUrl
     }
 
     pub fn is_request_method_edit(&self) -> bool {
@@ -511,8 +567,15 @@ impl App {
         let client = reqwest::blocking::Client::new();
 
         let url = self.request_url_text();
+        let params = self.request_params_map();
+        let headers = self.request_header_map();
+        let body = self.request_body_text().to_string();
 
-        let response = client.request(self.reqwest_method(), url).send();
+        let response = client.request(self.reqwest_method(), url)
+        .query(&params)
+        .headers(headers)
+        .body(body)
+        .send();
 
         if let Ok(resp) = response {
             self.response.status.text = format!("{:?}", resp.status());

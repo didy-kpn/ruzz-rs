@@ -130,7 +130,8 @@ pub fn draw(
                 Block::default()
                     .borders(Borders::ALL)
                     .title("Request Method"),
-            );
+            )
+            .highlight_symbol(">> ");
         f.render_stateful_widget(items, request_chunks[1], &mut request_method_state);
 
         // Request Header
