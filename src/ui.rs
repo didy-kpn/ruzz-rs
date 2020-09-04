@@ -12,13 +12,11 @@ use tui::{
     Terminal,
 };
 
-// use unicode_width::UnicodeWidthStr;
-
 pub fn draw(
     terminal: &mut Terminal<
         TermionBackend<AlternateScreen<MouseTerminal<termion::raw::RawTerminal<Stdout>>>>,
     >,
-    app: &app::App,
+    app: &mut app::App,
 ) {
     let request_url_text = app.request_url_text();
     let request_params_text = app.request_params_text();
@@ -90,6 +88,7 @@ pub fn draw(
             })
             .block(Block::default().borders(Borders::ALL).title("Request URL"));
         f.render_widget(request_url, main_chunks[0]);
+        app.request_url_rect_mut(main_chunks[0]);
 
         // Request Params
         let request_params = Paragraph::new(request_params_text.as_ref())
@@ -105,6 +104,7 @@ pub fn draw(
             })
             .block(Block::default().borders(Borders::ALL).title("URL params"));
         f.render_widget(request_params, request_chunks[0]);
+        app.request_params_rect_mut(request_chunks[0]);
 
         // Request Method
         let items: Vec<ListItem> = app
@@ -152,6 +152,7 @@ pub fn draw(
                     .title("Request Header"),
             );
         f.render_widget(request_header, request_chunks[2]);
+        app.request_header_rect_mut(request_chunks[2]);
 
         // Request Body
         let request_body = Paragraph::new(request_body_text.as_ref())
@@ -167,6 +168,7 @@ pub fn draw(
             })
             .block(Block::default().borders(Borders::ALL).title("Request Body"));
         f.render_widget(request_body, request_chunks[3]);
+        app.request_body_rect_mut(request_chunks[3]);
 
         // Request Status
         let response_status = Paragraph::new(response_status_text.as_ref())
@@ -190,6 +192,7 @@ pub fn draw(
                     .title("Response Header"),
             );
         f.render_widget(response_header, response_chunks[1]);
+        app.response_header_rect_mut(response_chunks[1]);
 
         // Response Body
         let response_body = Paragraph::new(response_body_text.as_ref())
@@ -203,22 +206,23 @@ pub fn draw(
                     .title("Response Body"),
             );
         f.render_widget(response_body, response_chunks[2]);
+        app.response_body_rect_mut(response_chunks[2]);
 
         match app.edit_mode() {
             app::EditMode::RequestUrl => f.set_cursor(
-                main_chunks[0].x + app.request_url_cursor_x() + 1,
+                main_chunks[0].x + app.request_url_cursor_x() as u16 + 1,
                 main_chunks[0].y + 1,
             ),
             app::EditMode::RequestParams => f.set_cursor(
-                request_chunks[0].x + app.request_params_cursor_x() + 1,
+                request_chunks[0].x + app.request_params_cursor_x() as u16 + 1,
                 request_chunks[0].y + 1,
             ),
             app::EditMode::RequestHeader => f.set_cursor(
-                request_chunks[2].x + app.request_header_cursor_x() + 1,
+                request_chunks[2].x + app.request_header_cursor_x() as u16 + 1,
                 request_chunks[2].y + 1,
             ),
             app::EditMode::RequestBody => f.set_cursor(
-                request_chunks[3].x + app.request_body_cursor_x() + 1,
+                request_chunks[3].x + app.request_body_cursor_x() as u16 + 1,
                 request_chunks[3].y + 1,
             ),
             _ => {}

@@ -56,14 +56,14 @@ pub fn edit_input_event(input: &Key, app: &mut app::App) {
         Key::Esc => {
             app.change_view_mode();
         }
-        Key::Right => {
+        Key::Down => {
             if app.is_request_method_edit() {
                 app.next_select_on_request_method();
             }
             // TODO: 2文字以上の移動+削除が想定外の動きをする
             // app.right_move_cursor();
         }
-        Key::Left => {
+        Key::Up => {
             if app.is_request_method_edit() {
                 app.prev_select_on_request_method();
             }

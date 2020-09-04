@@ -1,27 +1,69 @@
 // use unicode_width::UnicodeWidthStr;
 
-use tui::widgets::ListState;
-use std::collections::BTreeMap;
 use reqwest::header::HeaderMap;
+use std::collections::BTreeMap;
+use tui::widgets::ListState;
+use tui::layout::Rect;
 
 #[derive(Clone)]
 struct Cursor {
-    x: u16,
-    y: u16,
+    rows: usize,
+    cols: usize,
+}
+
+#[derive(Clone)]
+struct Text {
+    data: Vec<Vec<char>>,
+    cursor: Cursor,
+}
+
+impl Text {
+    fn new() -> Text {
+        Text {
+            data: vec![Vec::new()],
+            cursor: Cursor { rows: 0, cols: 0 },
+        }
+    }
+
+    fn text(&self) -> &String {
+        &self
+            .data
+            .into_iter()
+            .map(|x| x.into_iter().collect::<String>())
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
 }
 
 #[derive(Clone)]
 struct EditView {
-    text: String,
-    cursor: Cursor,
+    buffer: Text, // 全Textデータ
+    render: Text, // 表示用データ
+    chunk: Rect,  // レンタリングの位置、サイズの情報
 }
 
 impl EditView {
     fn new() -> EditView {
         EditView {
-            text: "".to_string(),
-            cursor: Cursor { x: 0, y: 0 },
+            buffer: Text::new(),
+            render: Text::new(),
+            chunk: Rect::default(),
         }
+    }
+
+    fn render_text(&self) -> &String {
+        &self.render.text()
+    }
+
+    fn render_cursor_x(self) -> usize {
+        self.render.cursor.cols
+    }
+
+    fn set_chunk(mut self, rect: Rect) {
+        self.chunk.x = rect.x;
+        self.chunk.y = rect.y;
+        self.chunk.width = rect.width;
+        self.chunk.height = rect.height;
     }
 }
 
@@ -70,7 +112,7 @@ impl ListMethod {
         let i = match self.state.selected() {
             Some(i) => {
                 if i >= self.items.len() - 1 {
-                    0
+                    self.items.len() - 1
                 } else {
                     i + 1
                 }
@@ -87,7 +129,7 @@ impl ListMethod {
             HttpMethod::CONNECT => HttpMethod::OPTIONS,
             HttpMethod::OPTIONS => HttpMethod::TRACE,
             HttpMethod::TRACE => HttpMethod::PATCH,
-            HttpMethod::PATCH => HttpMethod::GET,
+            HttpMethod::PATCH => HttpMethod::PATCH,
         };
     }
 
@@ -95,7 +137,7 @@ impl ListMethod {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.items.len() - 1
+                    0
                 } else {
                     i - 1
                 }
@@ -104,7 +146,7 @@ impl ListMethod {
         };
         self.state.select(Some(i));
         self.value = match self.value {
-            HttpMethod::GET => HttpMethod::PATCH,
+            HttpMethod::GET => HttpMethod::GET,
             HttpMethod::HEAD => HttpMethod::GET,
             HttpMethod::POST => HttpMethod::HEAD,
             HttpMethod::PUT => HttpMethod::POST,
@@ -191,35 +233,35 @@ impl App {
     }
 
     pub fn request_url_text(&self) -> &String {
-        &self.request.url.text
+        &self.request.url.render_text()
     }
 
     pub fn request_params_text(&self) -> &String {
-        &self.request.params.text
+        &self.request.params.render_text()
     }
 
     pub fn request_header_text(&self) -> &String {
-        &self.request.header.text
+        &self.request.header.render_text()
     }
 
     pub fn request_body_text(&self) -> &String {
-        &self.request.body.text
+        &self.request.body.render_text()
     }
 
     pub fn response_status_text(&self) -> &String {
-        &self.response.status.text
+        &self.response.status.render_text()
     }
 
     pub fn response_header_text(&self) -> &String {
-        &self.response.header.text
+        &self.response.header.render_text()
     }
 
     pub fn response_body_text(&self) -> &String {
-        &self.response.body.text
+        &self.response.body.render_text()
     }
 
-    pub fn request_url_cursor_x(&self) -> &u16 {
-        &self.request.url.cursor.x
+    pub fn request_url_cursor_x(self) -> usize {
+        self.request.url.render_cursor_x()
     }
 
     pub fn request_method_items_vec(&self) -> &Vec<String> {
@@ -230,16 +272,16 @@ impl App {
         &self.request.method.state
     }
 
-    pub fn request_params_cursor_x(&self) -> &u16 {
-        &self.request.params.cursor.x
+    pub fn request_params_cursor_x(self) -> usize {
+        self.request.params.render_cursor_x()
     }
 
-    pub fn request_header_cursor_x(&self) -> &u16 {
-        &self.request.header.cursor.x
+    pub fn request_header_cursor_x(self) -> usize {
+        self.request.header.render_cursor_x()
     }
 
-    pub fn request_body_cursor_x(&self) -> &u16 {
-        &self.request.body.cursor.x
+    pub fn request_body_cursor_x(self) -> usize {
+        self.request.body.render_cursor_x()
     }
 
     pub fn request_params_map(&self) -> BTreeMap<String, String> {
@@ -248,7 +290,7 @@ impl App {
 
         let mut params = BTreeMap::new();
         for query_str in request_params_text.split('&') {
-            let q:Vec<String> = query_str.split('=').map(|s| s.to_string()).collect();
+            let q: Vec<String> = query_str.split('=').map(|s| s.to_string()).collect();
             let key = q.get(0).unwrap_or(&"".to_string()).to_string();
             let value = q.get(1).unwrap_or(&"".to_string()).to_string();
             if key.len() == 0 && value.len() == 0 {
@@ -265,7 +307,7 @@ impl App {
 
         let mut headers = HeaderMap::new();
         for header_str in request_header_text.split('\n') {
-            let h:Vec<String> = header_str.split(':').map(|s| s.to_string()).collect();
+            let h: Vec<String> = header_str.split(':').map(|s| s.to_string()).collect();
             let key = h.get(0).unwrap_or(&"".to_string()).to_string();
             let value = h.get(1).unwrap_or(&"".to_string()).to_string();
 
@@ -276,18 +318,6 @@ impl App {
             let key = Box::leak(key.into_boxed_str());
 
             headers.entry(&*key).or_insert(value.parse().unwrap());
-
-            // if let Entry::Vacant(v) = headers.entry("x-hello") {
-            //     let mut e = v.insert_entry("world".parse().unwrap());
-            //     e.insert("world2".parse().unwrap());
-            // }
-
-            // let key = *key;
-            // let key = HeaderName::from_str(key);
-
-            // let value = h.get(1).unwrap_or(&"");
-            // let value = HeaderValue::from_str(*value);
-            // headers.append(key, value);
         }
         headers
     }
@@ -571,11 +601,12 @@ impl App {
         let headers = self.request_header_map();
         let body = self.request_body_text().to_string();
 
-        let response = client.request(self.reqwest_method(), url)
-        .query(&params)
-        .headers(headers)
-        .body(body)
-        .send();
+        let response = client
+            .request(self.reqwest_method(), url)
+            .query(&params)
+            .headers(headers)
+            .body(body)
+            .send();
 
         if let Ok(resp) = response {
             self.response.status.text = format!("{:?}", resp.status());
@@ -590,5 +621,29 @@ impl App {
 
     pub fn prev_select_on_request_method(&mut self) {
         self.request.method.previous();
+    }
+
+    pub fn request_url_rect_mut(&mut self, rect: Rect) {
+        self.request.url.set_chunk(rect);
+    }
+
+    pub fn request_params_rect_mut(&mut self, rect: Rect) {
+        self.request.params.set_chunk(rect);
+    }
+
+    pub fn request_header_rect_mut(&mut self, rect: Rect) {
+        self.request.header.set_chunk(rect);
+    }
+
+    pub fn request_body_rect_mut(&mut self, rect: Rect) {
+        self.request.body.set_chunk(rect);
+    }
+
+    pub fn response_header_rect_mut(&mut self, rect: Rect) {
+        self.response.header.set_chunk(rect);
+    }
+
+    pub fn response_body_rect_mut(&mut self, rect: Rect) {
+        self.response.body.set_chunk(rect);
     }
 }
